@@ -1,0 +1,36 @@
+Metadata-Version: 2.1
+Name: dwave-utils
+Version: 0.0.1
+Summary: Utilities for D-Wave quantum computers
+Home-page: https://github.com/quosta/dwave-utils
+Author: Costantino Carugno
+Author-email: costantino.carugno@polimi.it
+License: UNKNOWN
+Project-URL: Bug Tracker, https://github.com/quosta/dwave-utils/issues
+Platform: UNKNOWN
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: Apache Software License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.6
+Description-Content-Type: text/markdown
+License-File: LICENSE
+
+# dwave-utils
+
+A python lib that provides useful functions for D-Wave users.
+
+## Installation
+
+Install directly from PyPI:
+
+`python3 -m pip install dwave-utils`
+
+## Contributions
+
+Pull requests are welcome!
+
+Main contributors:
+
+* Costantino Carugno
+* Riccardo Nembrini
+
