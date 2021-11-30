@@ -3,9 +3,10 @@ README.md
 pyproject.toml
 setup.cfg
 src/dwave_utils/__init__.py
-src/dwave_utils/dwave_utils.py
 src/dwave_utils/test.py
+src/dwave_utils/utils.py
 src/dwave_utils.egg-info/PKG-INFO
 src/dwave_utils.egg-info/SOURCES.txt
 src/dwave_utils.egg-info/dependency_links.txt
+src/dwave_utils.egg-info/requires.txt
 src/dwave_utils.egg-info/top_level.txt
