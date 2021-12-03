@@ -240,8 +240,8 @@ def bruteforce_bqm_chunk(mat,chunk,n_chunks):
             digit = digit >> 1
     for i in range((chunk-1) * n_max // n_chunks, chunk * n_max // n_chunks):
         energies[i - (chunk-1) * n_max // n_chunks] = \
-            dwu.mul_vec(sol_mat[i - (chunk-1) * n_max // n_chunks],\
-            dwu.mul_mat(mat,sol_mat[i - (chunk-1) * n_max // n_chunks]))
+            mul_vec(sol_mat[i - (chunk-1) * n_max // n_chunks],\
+            mul_mat(mat,sol_mat[i - (chunk-1) * n_max // n_chunks]))
     return energies
 
 
