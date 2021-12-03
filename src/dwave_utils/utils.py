@@ -143,37 +143,6 @@ def get_bqm_matrix(bqm):
     
     return Q
 
-@nb.njit(fastmath=True)
-def bruteforce_bqm(mat):
-    '''
-    Solve the BQM by direct multiplication of the matrix with all the possible
-    binary strings
-    
-    Parameters
-    ----------
-    bqm : dimod.BQM
-        A Binary Quadratic Model
-    df : TYPE, optional
-        Return the DataFrame with bitstr and solutions. The default is True.
-    verbose : TYPE, optional
-        Print the lowest energy state. The default is True.
-
-    Returns
-    -------
-    Pandas DataFrame or tuple
-        Depending on the df flag, it returns either the complete DataFrame or
-        just the minimal energy state as (bitstr, energy)
-
-    '''
-    n = mat.shape[0]
-    n_max = 2**n
-    energies = np.zeros(n_max)
-    sol_mat = get_sol_mat(n) 
-    
-    for i in range(n_max):
-        energies[i] = mul_vec(sol_mat[i],mul_mat(mat,sol_mat[i]))
-    return energies
-
   
 @nb.njit(fastmath=True)
 def mul_vec(vec1,vec2):
@@ -182,6 +151,7 @@ def mul_vec(vec1,vec2):
     for i in range(n):
         prod += vec1[i]*vec2[i]
     return prod    
+
 
 @nb.njit(fastmath=True)    
 def mul_mat(mat,vec):
@@ -205,6 +175,74 @@ def get_sol_mat(n):
             count -= 1
             digit = digit >> 1
     return sol_mat
+
+
+@nb.njit(fastmath=True)
+def bruteforce_bqm(mat):
+    '''
+    Solve the BQM by direct multiplication of the matrix with all the possible
+    binary strings
+    
+    Parameters
+    ----------
+    bqm : dimod.BQM
+        A Binary Quadratic Model
+
+    Returns
+    -------
+    energies : np.array
+        An array of all the energies. The index represents the binary string
+        of the state
+    '''
+    n = mat.shape[0]
+    n_max = 2**n
+    energies = np.zeros(n_max)
+    sol_mat = get_sol_mat(n) 
+    
+    for i in range(n_max):
+        energies[i] = mul_vec(sol_mat[i],mul_mat(mat,sol_mat[i]))
+    return energies
+
+
+@nb.jit(fastmath=True)
+def bruteforce_bqm_chunk(mat,chunk,n_chunks):
+    '''
+    Solve a chunk of the BQM by direct multiplication of the matrix with all 
+    the possible binary strings
+    
+    Parameters
+    ----------
+    bqm : dimod.BQM
+        A Binary Quadratic Model
+    chunk : int
+        Index of the chunk to solve
+    n_chunk : int
+        Total number of chunks 
+        
+    Returns
+    -------
+    energies : np.array
+        An array of all the energies. The index represents the binary string
+        of the state
+    '''
+    n = mat.shape[0]
+    n_max = 2**n
+    energies = np.zeros(n_max//n_chunks)
+    
+    sol_mat = np.zeros((n_max//n_chunks,n),np.uint8)
+    for i in range((chunk-1) * n_max // n_chunks, chunk * n_max // n_chunks):
+        digit = i
+        count = n-1
+        while count != -1:
+            remainder = digit & 1
+            sol_mat[i - (chunk-1) * n_max // n_chunks][count] = remainder
+            count -= 1
+            digit = digit >> 1
+    for i in range((chunk-1) * n_max // n_chunks, chunk * n_max // n_chunks):
+        energies[i - (chunk-1) * n_max // n_chunks] = \
+            dwu.mul_vec(sol_mat[i - (chunk-1) * n_max // n_chunks],\
+            dwu.mul_mat(mat,sol_mat[i - (chunk-1) * n_max // n_chunks]))
+    return energies
 
 
 def get_sol_df(energies):
