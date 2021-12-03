@@ -2,6 +2,7 @@ import dimod
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
+import numba as nb
 import seaborn as sns
 import minorminer
 from dwave.embedding import embed_bqm, EmbeddedStructure
@@ -83,21 +84,6 @@ def random_dense_bqm(n):
     return dimod.BQM.from_qubo(Q)
 
 
-def get_bqm_matrix(bqm):
-    # Q_dict = bqm.to_qubo()[0]
-    # n = bqm.num_variables
-    # Q = np.matrix(np.zeros((n,n)))
-    # for k,v in Q_dict.items():
-    #     Q[k[0],k[1]] = v
-    
-    bqm_df = bqm_getdf(bqm,None)  
-    bqm_df = bqm_df.pivot('x', 'y', 'h')
-    bqm_df = bqm_df.replace(np.nan, 0)
-    Q = np.matrix(bqm_df.to_numpy())
-    
-    return Q
-
-
 def random_sparse_bqm(n,connectivity=0.4):
     '''
     Create a sparse BQM, with sparsity given as parameter. The rest of the 
@@ -116,8 +102,22 @@ def random_sparse_bqm(n,connectivity=0.4):
     dimod.BQM
         Output BQM
     '''
-    Q = random_dense_bqm(n)
-    Q = get_bqm_matrix(Q)
+    #generate dense bqm
+    # SHOULD BE REPLACED BY
+    #Q = random_dense_bqm(n)
+    #Q = get_bqm_matrix(Q)
+    Q = np.random.rand(n,n)
+    Q = np.tril(Q, k=0)
+    times = int(n*(n+1)//4)
+    i = 0
+    seen = []
+    while i < times:
+        x, y = np.random.choice(Q.shape[0], 2, replace=True)
+        if x >= y and (x,y) not in seen:
+            Q[x,y] = -Q[x,y]
+            i += 1
+            seen.append((x,y))
+    #set the appropriate number of Q elements to zero
     times = int(n*(n-1)//2*(1-connectivity))
     i = 0
     while i < times:
@@ -128,9 +128,23 @@ def random_sparse_bqm(n,connectivity=0.4):
     return dimod.BQM.from_qubo(Q)
 
 
-def bruteforce_bqm(bqm: dimod.BQM, 
-                   df = True, 
-                   verbose = True):
+def get_bqm_matrix(bqm):   
+    # NEEDS TO BE FIXED TO NOT USE PANDAS
+    # Q_dict = bqm.to_qubo()[0]
+    # n = bqm.num_variables
+    # Q = np.matrix(np.zeros((n,n)))
+    # for k,v in Q_dict.items():
+    #     Q[k[0],k[1]] = v
+    
+    bqm_df = bqm_getdf(bqm,None)  
+    bqm_df = bqm_df.pivot('x', 'y', 'h')
+    bqm_df = bqm_df.replace(np.nan, 0)
+    Q = np.matrix(bqm_df.to_numpy())
+    
+    return Q
+
+@nb.njit(fastmath=True)
+def bruteforce_bqm(mat):
     '''
     Solve the BQM by direct multiplication of the matrix with all the possible
     binary strings
@@ -151,32 +165,55 @@ def bruteforce_bqm(bqm: dimod.BQM,
         just the minimal energy state as (bitstr, energy)
 
     '''
-    n = len(bqm.linear)
-    max_n = 2**n
-    sol_list = np.matrix([list(np.binary_repr(i,n)) for i in range(max_n)]).astype(int)
+    n = mat.shape[0]
+    n_max = 2**n
+    energies = np.zeros(n_max)
+    sol_mat = get_sol_mat(n) 
+    
+    for i in range(n_max):
+        energies[i] = mul_vec(sol_mat[i],mul_mat(mat,sol_mat[i]))
+    return energies
 
-    sol_df = pd.DataFrame(columns=['bitstr','energy'])
-    mat = get_bqm_matrix(bqm)
-    if df is True:
-        for s in sol_list:
-            energy = s @ mat @ s.T
-            sol_df = sol_df.append({
-                    'bitstr':s.tolist()[0], 
-                    'energy':energy.item()
-                    },ignore_index=True)
-        if verbose:
-            print("Lowest energies: ", sol_df[sol_df.energy == sol_df.energy.min()])
-        return sol_df
-    else:
-        E_min = 10**3
-        for s in sol_list:
-            energy = s @ mat @ s.T
-            if energy.item() < E_min:
-                E_min = energy.item() 
-                sol_min = s.tolist()[0]
-        return sol_min, E_min
+  
+@nb.njit(fastmath=True)
+def mul_vec(vec1,vec2):
+    n = vec1.size
+    prod = 0
+    for i in range(n):
+        prod += vec1[i]*vec2[i]
+    return prod    
+
+@nb.njit(fastmath=True)    
+def mul_mat(mat,vec):
+    n = mat.shape[0]
+    prod = np.zeros(n)
+    for i in range(n):
+        for j in range(n):
+            prod[i] += mat[i,j]*vec[j] 
+    return prod
+
+
+@nb.njit(fastmath=True)    
+def get_sol_mat(n):
+    sol_mat = np.zeros((2**n,n),np.uint8)
+    for i in range(2**n):
+        digit = i
+        count = n-1
+        while count != -1:
+            remainder = digit & 1
+            sol_mat[i][count] = remainder
+            count -= 1
+            digit = digit >> 1
+    return sol_mat
+
+
+def get_sol_df(energies):
+    df = pd.DataFrame(columns=['bitstr','energy'])
+    df['bitstr'] = pd.Series([i for i in get_sol_mat(int(np.log2(len(energies))))])
+    df['energy'] = energies
+    return df
+
             
-
 def bqm_info(bqm: dimod.BQM,
              verbose=False):
     '''
@@ -659,7 +696,6 @@ def get_energy_from_solution(bqm, solution):
     sol_bitstr = np.matrix([i for i in solution.values()])
     sol = sol_bitstr @ mat @ sol_bitstr.T
     return sol.item()
-
 
 
 def hist_helper(df,field='chain_length'):
